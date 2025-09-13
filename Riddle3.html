@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CS Treasure Hunt :: Access Point</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --background-color: #010a01;
+            --scanline-color: rgba(0, 255, 0, 0.05);
+            --glow-color: #00ff6a;
+            --text-color: #e0ffe0;
+            --border-glow-color: rgba(0, 255, 106, 0.5);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Fira Code', monospace;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 2rem;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        #matrix-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+        }
+
+        /* Animated grid background */
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                linear-gradient(to right, rgba(0, 255, 106, 0.1) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(0, 255, 106, 0.1) 1px, transparent 1px);
+            background-size: 40px 40px;
+            opacity: 0.5;
+            z-index: -3;
+        }
+        
+        /* Scanline effect overlay */
+        body::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                0deg,
+                var(--scanline-color),
+                var(--scanline-color) 1px,
+                transparent 1px,
+                transparent 2px
+            );
+            animation: scanline 8s linear infinite;
+            pointer-events: none;
+            z-index: -2;
+        }
+
+        @keyframes scanline {
+            0% { background-position: 0 0; }
+            100% { background-position: 0 100px; }
+        }
+
+        .terminal-window {
+            width: 100%;
+            max-width: 800px;
+            background: rgba(10, 25, 10, 0.4);
+            border: 1px solid rgba(0, 255, 106, 0.2);
+            border-radius: 8px;
+            padding: 2rem;
+            box-shadow: 
+                0 0 15px var(--border-glow-color),
+                inset 0 0 15px rgba(0, 20, 0, 0.8);
+            backdrop-filter: blur(3px);
+            -webkit-backdrop-filter: blur(3px);
+            position: relative;
+            z-index: 2;
+        }
+
+        .terminal-header {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--glow-color);
+            text-shadow: 
+                0 0 5px var(--glow-color),
+                0 0 10px var(--glow-color),
+                0 0 15px var(--glow-color);
+            margin-bottom: 2rem;
+            display: inline-block;
+        }
+
+        .cursor {
+            display: inline-block;
+            width: 10px;
+            height: 1.5rem;
+            background-color: var(--glow-color);
+            margin-left: 8px;
+            animation: blink 1s steps(1) infinite;
+            box-shadow: 0 0 5px var(--glow-color);
+        }
+
+        @keyframes blink {
+            50% { opacity: 0; }
+        }
+
+        .riddle-content {
+            font-size: 1.1rem;
+            line-height: 1.8;
+            white-space: pre-wrap;
+            animation: text-flicker 3s linear infinite alternate;
+        }
+        
+        .riddle-line {
+            display: block;
+            opacity: 0; /* Initially hidden for typing animation */
+        }
+        
+        @keyframes text-flicker {
+            from {
+                text-shadow: 0 0 2px var(--glow-color);
+            }
+            to {
+                text-shadow: 0 0 6px var(--glow-color);
+            }
+        }
+        
+        .footer-text {
+            margin-top: 2rem;
+            text-align: center;
+            font-size: 0.9rem;
+            color: rgba(0, 255, 106, 0.6);
+            letter-spacing: 1px;
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            body { padding: 1rem; }
+            .terminal-window { padding: 1.5rem; }
+            .terminal-header { font-size: 1.25rem; }
+            .cursor { height: 1.25rem; }
+            .riddle-content { font-size: 1rem; }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="matrix-canvas"></canvas>
+    <main class="terminal-window">
+        <h1 class="terminal-header" id="terminal-title"></h1>
+        <div class="riddle-content" id="riddle-content">
+            <!-- Riddle lines will be injected by JavaScript -->
+        </div>
+        <p class="footer-text" id="footer-text"></p>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- Matrix Rain Animation ---
+            const canvas = document.getElementById('matrix-canvas');
+            const ctx = canvas.getContext('2d');
+
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+
+            const matrixChars = "アァカサタナハマヤャラワガザダバパイィキシチニヒミリヰギジヂビピウゥクスツヌフムユュルグズブヅプエェケセテネヘメレヱゲゼデベペオォコソトノホモヨョロヲゴゾドボポヴッン0123456789";
+            const characters = matrixChars.split('');
+            const fontSize = 16;
+            let columns = Math.floor(canvas.width / fontSize);
+            const drops = [];
+            for (let x = 0; x < columns; x++) {
+                drops[x] = 1;
+            }
+
+            function drawMatrix() {
+                ctx.fillStyle = 'rgba(1, 10, 1, 0.05)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                ctx.fillStyle = 'rgba(0, 255, 106, 0.7)';
+                ctx.font = fontSize + 'px Fira Code';
+
+                for (let i = 0; i < drops.length; i++) {
+                    const text = characters[Math.floor(Math.random() * characters.length)];
+                    ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+                    if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+                        drops[i] = 0;
+                    }
+                    drops[i]++;
+                }
+            }
+            
+            const matrixInterval = setInterval(drawMatrix, 35);
+            
+            window.addEventListener('resize', () => {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                columns = Math.floor(canvas.width / fontSize);
+                drops.length = 0;
+                for (let x = 0; x < columns; x++) {
+                    drops[x] = 1;
+                }
+            });
+
+
+            // --- Terminal Typing Animation ---
+            const riddleLines = [
+                "Miss a day, and trouble you’ll face,",
+                "One floor above is the dreaded place.",
+                "With strict commands that never bend,",
+                "Your hidden clue waits with the friend-foe blend."
+            ];
+
+            const title = "> CSE_TREASURE_HUNT";
+            const footer = "[Good Luck, Codebreaker]";
+
+            const titleElement = document.getElementById('terminal-title');
+            const riddleContainer = document.getElementById('riddle-content');
+            const footerElement = document.getElementById('footer-text');
+            
+            function typeWriter(element, text, speed, onComplete) {
+                let i = 0;
+                function type() {
+                    if (i < text.length) {
+                        element.innerHTML += text.charAt(i);
+                        i++;
+                        setTimeout(type, speed);
+                    } else if (onComplete) {
+                        onComplete();
+                    }
+                }
+                type();
+            }
+
+            function typeRiddle(lines, container, lineSpeed, delayBetweenLines) {
+                let lineIndex = 0;
+                
+                function nextLine() {
+                    if (lineIndex < lines.length) {
+                        const lineEl = document.createElement('span');
+                        lineEl.className = 'riddle-line';
+                        container.appendChild(lineEl);
+                        
+                        lineEl.style.opacity = 1;
+                        
+                        typeWriter(lineEl, lines[lineIndex], lineSpeed, () => {
+                            lineIndex++;
+                            setTimeout(nextLine, delayBetweenLines);
+                        });
+                    } else {
+                         setTimeout(() => {
+                           footerElement.style.opacity = 1;
+                           typeWriter(footerElement, footer, 75);
+                         }, 500);
+                    }
+                }
+                nextLine();
+            }
+            
+            titleElement.innerHTML = '';
+            const cursorSpan = document.createElement('span');
+            cursorSpan.className = 'cursor';
+            
+            typeWriter(titleElement, title, 100, () => {
+                titleElement.appendChild(cursorSpan);
+
+                setTimeout(() => {
+                    riddleContainer.innerHTML = '';
+                    typeRiddle(riddleLines, riddleContainer, 50, 400);
+                }, 1000);
+            });
+            
+            footerElement.style.opacity = 0;
+            footerElement.style.transition = 'opacity 0.5s ease-in-out';
+        });
+    </script>
+</body>
+</html>
+
